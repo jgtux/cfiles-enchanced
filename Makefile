@@ -1,33 +1,39 @@
-CC = gcc
+CC ?= cc
 
-NCURSES_CFLAGS = `pkg-config --cflags ncursesw`
-NCURSES_LIBS =  `pkg-config --libs ncursesw`
+NCURSES_CFLAGS := `pkg-config --cflags ncursesw`
+NCURSES_LIBS := `pkg-config --libs ncursesw`
 
-LIBS += $(NCURSES_LIBS)
-CFLAGS += $(NCURSES_CFLAGS)
+CFLAGS ?= -O2 -Wall
+CFLAGS += $(NCURSES_CFLAGS) -MMD -MP
+
+LDFLAGS += -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+LDLIBS  += $(NCURSES_LIBS)
 
 SRCS = cf.c
-OBJS = $(SRCS: .c = .o)
+OBJS = $(SRCS:.c=.o)
+DEPS = $(OBJS:.o=.d)
 PROG = cfiles
 
-prefix = usr
-bindir = $(prefix)/bin
-scriptdir = $(prefix)/share/cfiles/scripts
-mandir = $(prefix)/share/man
+PREFIX ?= /usr/local
+BINDIR = $(PREFIX)/bin
+SCRIPTDIR = $(PREFIX)/share/cfiles/scripts
+MANDIR = $(PREFIX)/share/man
 
-BINDIR = $(DESTDIR)/$(bindir)
-MANDIR = $(DESTDIR)/$(mandir)
-SCRIPTDIR = $(DESTDIR)/$(scriptdir)
+BINDIR = $(DESTDIR)/$(BINDIR)
+MANDIR = $(DESTDIR)/$(MANDIR)
+SCRIPTDIR = $(DESTDIR)/$(SCRIPTDIR)
 
-all: $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $(PROG) $(LIBS)
+.PHONY: all clean install uninstall
 
-.c.o:
-	$(CC) $(CFLAGS) -c $<
+all: $(PROG)
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
+-include $(DEPS)
 
 clean:
-	rm *.o
-	rm *~
+	rm -f $(OBJS) $(DEPS) $(PROG) *~
 
 install:
 	install -Dm 755 $(PROG) $(BINDIR)/$(PROG)
@@ -38,10 +44,9 @@ install:
 	install -Dm 644 cfiles.1 $(MANDIR)/man1/cfiles.1
 
 uninstall:
-	rm -v $(BINDIR)/$(PROG)
-	rm -v $(SCRIPTDIR)/clearimg
-	rm -v $(SCRIPTDIR)/clearimg_uberzug
-	rm -v $(SCRIPTDIR)/displayimg_uberzug
-	rm -v $(SCRIPTDIR)/displayimg
-	rm -v $(MANDIR)/man1/cfiles.1
-
+	rm -f $(BINDIR)/$(PROG)
+	rm -f $(SCRIPTDIR)/clearimg
+	rm -f $(SCRIPTDIR)/clearimg_uberzug
+	rm -f $(SCRIPTDIR)/displayimg_uberzug
+	rm -f $(SCRIPTDIR)/displayimg
+	rm -f $(MANDIR)/man1/cfiles.1
