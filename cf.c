@@ -166,7 +166,7 @@ int startx, starty, maxx, maxy;
 /*
    Displays current status in the status bar
 */
-void displayStatus()
+static void displayStatus(void)
 {
     wmove(status_win,1,0);
     wattron(status_win, COLOR_PAIR(2));
@@ -190,7 +190,7 @@ void displayStatus()
 /*
    Displays message on status bar
 */
-void displayAlert(char *message)
+static void displayAlert(char *message)
 {
     wclear(status_win);
     wattron(status_win, A_BOLD);
@@ -215,7 +215,7 @@ static void cb_sig(int signal)
 /*
    Checks if `path` is a file or directory
 */
-int is_regular_file(const char *path)
+static int is_regular_file(const char *path)
 {
     struct stat path_stat;
     stat(path, &path_stat);
@@ -226,7 +226,7 @@ int is_regular_file(const char *path)
 /*
     Sets value of `selectedFiles`
 */
-void setSelectionCount()
+static void setSelectionCount(void)
 {
     FILE *fp = fopen(clipboard_path, "r");
     if( fp == NULL )
@@ -249,7 +249,7 @@ void setSelectionCount()
    Initializes the program
    Sets the relevant file paths
 */
-void init(int argc, char* argv[])
+static void init(int argc, char* argv[])
 {
     // For masking SIGWINCH signals
     sigemptyset (&x);
@@ -469,7 +469,7 @@ void init(int argc, char* argv[])
 /*
    Initializes ncurses
 */
-void curses_init()
+static void curses_init(void)
 {
     initscr();
     noecho();
@@ -484,7 +484,7 @@ void curses_init()
 /*
    Checks if a file exists or not
 */
-int fileExists(char *file)
+static int fileExists(char *file)
 {
     if( access( file, F_OK ) != -1 )
         return 1;
@@ -496,7 +496,7 @@ int fileExists(char *file)
 /*
    Gets the last token from temp_dir by using `tokenizer` as a delimeter
 */
-void getLastToken(char *tokenizer)
+static void getLastToken(char *tokenizer)
 {
     pch = strtok(temp_dir, tokenizer);
     while (pch != NULL)
@@ -517,7 +517,7 @@ void getLastToken(char *tokenizer)
 /*
    Get number of bookmarks
 */
-int getNumberOfBookmarks()
+static int getNumberOfBookmarks(void)
 {
     FILE *fp = fopen(bookmarks_path, "r");
     if( fp == NULL )
@@ -546,7 +546,7 @@ int getNumberOfBookmarks()
 /*
    Displays the bookmarks in `keys_win`
 */
-void displayBookmarks()
+static void displayBookmarks(void)
 {
     FILE *fp = fopen(bookmarks_path, "r");
     char *buf;
@@ -591,7 +591,7 @@ void displayBookmarks()
 /*
     Replaces `a` with `b` in `str`
 */
-char* replace(char* str, char* a, char* b)
+static char* replace(char* str, char* a, char* b)
 {
     int len  = strlen(str);
     int lena = strlen(a);
@@ -610,7 +610,7 @@ char* replace(char* str, char* a, char* b)
 /*
    Opens the bookmark denoted by `secondKey`
 */
-void openBookmarkDir(char secondKey)
+static void openBookmarkDir(char secondKey)
 {
     FILE *fp = fopen(bookmarks_path, "r");
     char *buf;
@@ -671,7 +671,7 @@ void openBookmarkDir(char secondKey)
 /*
    Checks if bookmark denoted with `bookmark` exists
 */
-int bookmarkExists(char bookmark)
+static int bookmarkExists(char bookmark)
 {
     FILE *fp = fopen(bookmarks_path, "r");
     if( fp == NULL )
@@ -704,7 +704,7 @@ int bookmarkExists(char bookmark)
 /*
    Adds new bookmark
 */
-void addBookmark(char bookmark, char *path)
+static void addBookmark(char bookmark, char *path)
 {
     FILE *fp = fopen(bookmarks_path, "a+");
     if(fp == NULL)
@@ -731,7 +731,7 @@ void addBookmark(char bookmark, char *path)
 /*
    Creates a new window with dimensions `height` and `width` starting at `starty` and `startx`
 */
-WINDOW *create_newwin(int height, int width, int starty, int startx)
+static WINDOW *create_newwin(int height, int width, int starty, int startx)
 {
     WINDOW *local_win;
     local_win = newwin(height, width, starty, startx);
@@ -742,7 +742,7 @@ WINDOW *create_newwin(int height, int width, int starty, int startx)
 /*
    For qsort
 */
-int compare (const void * a, const void * b )
+static int compare (const void * a, const void * b )
 {
     // They store the full paths of the arguments
     char *temp_filepath1 = NULL;
@@ -792,7 +792,7 @@ int compare (const void * a, const void * b )
 /*
    Gets file MIME
 */
-void getMIME(char *filepath, char mime[50])
+static void getMIME(char *filepath, char mime[50])
 {
     char buf[50];
     FILE *fp;
@@ -853,7 +853,7 @@ void getMIME(char *filepath, char mime[50])
 /*
    Creates current_win, preview_win and status_win
 */
-void init_windows()
+static void init_windows(void)
 {
     current_win = create_newwin(maxy, maxx/2+2, 0, 0);
     preview_win = create_newwin(maxy, maxx/2-1, 0, maxx/2+1);
@@ -866,7 +866,7 @@ void init_windows()
 /*
    Opens a file using FILE_OPENER
 */
-void openFile(char *filepath)
+static void openFile(char *filepath)
 {
     char mime[50];
     getMIME(filepath, mime);
@@ -906,7 +906,7 @@ void openFile(char *filepath)
 /*
    Checks if path is in clipboard
 */
-int checkClipboard(char *filepath)
+static int checkClipboard(char *filepath)
 {
     FILE *f = fopen(clipboard_path, "r");
     char buf[PATH_MAX];
@@ -947,7 +947,7 @@ int checkClipboard(char *filepath)
 /*
    Writes to clipboard
 */
-void writeClipboard(char *filepath)
+static void writeClipboard(char *filepath)
 {
     FILE *f = fopen(clipboard_path,"a+");
     if (f == NULL)
@@ -964,7 +964,7 @@ void writeClipboard(char *filepath)
 /*
    Removes entry from clipboard
 */
-void removeClipboard(char *filepath)
+static void removeClipboard(char *filepath)
 {
     FILE *f1;
     FILE *f2;
@@ -1013,7 +1013,7 @@ void removeClipboard(char *filepath)
 /*
    Empties Clipboard
 */
-void emptyClipboard()
+static void emptyClipboard(void)
 {
     if( remove(clipboard_path) == -1)
     {
@@ -1025,7 +1025,7 @@ void emptyClipboard()
 /*
    Gets previews of images
 */
-void getImgPreview(char *filepath, int maxy, int maxx)
+static void getImgPreview(char *filepath, int maxy, int maxx)
 {
     pid_t pid;
     pid = fork();
@@ -1052,7 +1052,7 @@ void getImgPreview(char *filepath, int maxy, int maxx)
 /*
     Gets previews of PDF Documents
 */
-void getPDFPreview(char *filepath, int maxy, int maxx)
+static void getPDFPreview(char *filepath, int maxy, int maxx)
 {
     // Set the signal handler
     struct sigaction act;
@@ -1105,7 +1105,7 @@ void getPDFPreview(char *filepath, int maxy, int maxx)
 /*
    Gets previews of text in files
 */
-void getTextPreview(char *filepath, int maxy, int maxx)
+static void getTextPreview(char *filepath, int maxy, int maxx)
 {
     // Don't Generate Preview if file size > 50MB
     struct stat st;
@@ -1207,7 +1207,7 @@ void getTextPreview(char *filepath, int maxy, int maxx)
 /*
    Gets previews of archives
 */
-void getArchivePreview(char *filepath, int maxy, int maxx)
+static void getArchivePreview(char *filepath, int maxy, int maxx)
 {
     pid_t pid;
     int fd;
@@ -1280,7 +1280,7 @@ void getArchivePreview(char *filepath, int maxy, int maxx)
 /*
    Gets previews of video files (Dummy)
 */
-void getDummyVidPreview(char *filepath, int maxy, int maxx)
+static void getDummyVidPreview(char *filepath, int maxy, int maxx)
 {
     wmove(preview_win,1,2);
     wprintw(preview_win,"%.*s",maxx-4,"Press i to see info");
@@ -1291,7 +1291,7 @@ void getDummyVidPreview(char *filepath, int maxy, int maxx)
 /*
    Sets `temp_dir` to filepath and then stores the extension in `last`
 */
-void getFileType(char *filepath)
+static void getFileType(char *filepath)
 {
     free(temp_dir);
     allocSize = snprintf(NULL,0,"%s",filepath);
@@ -1310,7 +1310,7 @@ void getFileType(char *filepath)
 /*
    Checks `last` for extension and then calls the appropriate preview function
 */
-void getPreview(char *filepath, int maxy, int maxx)
+static void getPreview(char *filepath, int maxy, int maxx)
 {
     getFileType(filepath);
     if(strcasecmp("jpg",last) == 0 || strcasecmp("png",last) == 0 || strcasecmp("gif",last) == 0 || strcasecmp("jpeg",last) == 0 || strcasecmp("mp3",last) == 0)
@@ -1332,7 +1332,7 @@ void getPreview(char *filepath, int maxy, int maxx)
 /*
    Gets previews of video files
 */
-void getVidPreview(char *filepath, int maxy, int maxx)
+static void getVidPreview(char *filepath, int maxy, int maxx)
 {
     pid_t pid;
     int fd;
@@ -1388,7 +1388,7 @@ void getVidPreview(char *filepath, int maxy, int maxx)
 /*
    Gets path of parent directory
 */
-void getParentPath(char *path)
+static void getParentPath(char *path)
 {
     char *p;
     p = strrchr(path,'/');
@@ -1405,7 +1405,7 @@ void getParentPath(char *path)
 /*
    Returns number of files in `char* directory`
 */
-int getNumberofFiles(char* directory)
+static int getNumberofFiles(char* directory)
 {
     int len=0;
     DIR *pDir;
@@ -1434,7 +1434,7 @@ int getNumberofFiles(char* directory)
 /*
    Stores all the file names in `char* directory` to `char *target[]`
 */
-int getFiles(char* directory, char* target[])
+static int getFiles(char* directory, char* target[])
 {
     int i = 0;
     DIR *pDir;
@@ -1471,7 +1471,7 @@ int getFiles(char* directory, char* target[])
     Gets write permissions
     Returns 1 is `path` is writable
 */
-int getWritePermissions(char *path)
+static int getWritePermissions(char *path)
 {
     if( access(path, W_OK) == 0 )
         return 1;
@@ -1483,7 +1483,7 @@ int getWritePermissions(char *path)
 /*
    Copy files in clipboard to `present_dir`
 */
-void copyFiles(char *present_dir)
+static void copyFiles(char *present_dir)
 {
     FILE *f = fopen(clipboard_path, "r");
     char buf[PATH_MAX];
@@ -1527,7 +1527,7 @@ void copyFiles(char *present_dir)
 /*
    Removes files in clipboard
 */
-void removeFiles()
+static void removeFiles(void)
 {
     FILE *f = fopen(clipboard_path, "r");
     char buf[PATH_MAX];
@@ -1570,7 +1570,7 @@ void removeFiles()
 /*
    Rename files in clipboard
 */
-void renameFiles()
+static void renameFiles(void)
 {
     // For storing pid of children
     pid_t pid;
@@ -1680,7 +1680,7 @@ void renameFiles()
 /*
    Move files in clipboard to `present_dir`
 */
-void moveFiles(char *present_dir)
+static void moveFiles(char *present_dir)
 {
     FILE *f = fopen(clipboard_path, "r");
     char buf[PATH_MAX];
@@ -1725,7 +1725,7 @@ void moveFiles(char *present_dir)
 /*
     Refresh ncurses windows
 */
-void refreshWindows()
+static void refreshWindows(void)
 {
     if(bordersFlag == 1)
     {
@@ -1740,7 +1740,7 @@ void refreshWindows()
 /*
     Clears Image
 */
-void clearImg()
+static void clearImg(void)
 {
         // Store arguments for CLEARIMG script
         char arg1[5];
@@ -1768,7 +1768,7 @@ void clearImg()
 /*
     Opens `preview` file in pager
 */
-void viewPreview()
+static void viewPreview(void)
 {
     pid_t pid;
     char *preview_path = NULL;
@@ -1870,7 +1870,7 @@ void handleFlags(char** directories)
 /*
     Scrolls Up
 */
-void scrollUp()
+static void scrollUp(void)
 {
     selection--;
     selection = ( selection < 0 ) ? 0 : selection;
@@ -1892,7 +1892,7 @@ void scrollUp()
 /*
     Scrolls Down
 */
-void scrollDown()
+static void scrollDown(void)
 {
     selection++;
     selection = ( selection > len-1 ) ? len-1 : selection;
@@ -1912,7 +1912,7 @@ void scrollDown()
 /*
     Goes to next page
 */
-void nextPage()
+static void nextPage(void)
 {
     if(selection + maxy-1 < len)
     {
@@ -1926,7 +1926,7 @@ void nextPage()
 /*
     Goes to previous page
 */
-void prevPage()
+static void prevPage(void)
 {
     start = ( start - maxy-1 > 0 ) ? start - maxy-1 : 0;
     selection = ( selection - maxy-1 > 0 ? selection - maxy-1 : 0);
@@ -1937,7 +1937,7 @@ void prevPage()
 /*
     Goes to child directory or opens a file
 */
-void goForward()
+static void goForward(void)
 {
     if(len_preview != -1)
     {
@@ -1966,7 +1966,7 @@ void goForward()
 /*
     Goes to parent directory
 */
-void goBack()
+static void goBack(void)
 {
     // Reallocate `temp_dir` and Copy present directory to temp_dir to work with strtok()
     free(temp_dir);

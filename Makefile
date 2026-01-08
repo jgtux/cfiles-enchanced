@@ -1,10 +1,23 @@
-CC ?= cc
+.ifdef .MAKE
+# BSD Make
+NCURSES_CFLAGS != pkg-config --cflags ncursesw
+NCURSES_LIBS   != pkg-config --libs ncursesw
+.else
+# GNU Make
+NCURSES_CFLAGS := $(shell pkg-config --cflags ncursesw)
+NCURSES_LIBS   := $(shell pkg-config --libs ncursesw)
+.endif
 
-NCURSES_CFLAGS := `pkg-config --cflags ncursesw`
-NCURSES_LIBS := `pkg-config --libs ncursesw`
+CC ?= cc
 
 CFLAGS ?= -O2 -Wall
 CFLAGS += $(NCURSES_CFLAGS) -MMD -MP
+
+DEBUG_CFLAGS = -O0 -g \
+	-Wall -Wextra -Wpedantic -Wshadow -Wconversion \
+	-Wcast-align -Wstrict-prototypes -Wmissing-prototypes \
+	-Wformat=2 -Wundef -Wwrite-strings \
+	-Werror=implicit-function-declaration
 
 LDFLAGS += -Wl,-z,relro,-z,now -Wl,-z,noexecstack
 LDLIBS  += $(NCURSES_LIBS)
@@ -12,18 +25,14 @@ LDLIBS  += $(NCURSES_LIBS)
 SRCS = cf.c
 OBJS = $(SRCS:.c=.o)
 DEPS = $(OBJS:.o=.d)
-PROG = cfiles
+PROG ?= cfiles
 
 PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
-SCRIPTDIR = $(PREFIX)/share/cfiles/scripts
+SCRIPTDIR = $(PREFIX)/share/$(PROG)/scripts
 MANDIR = $(PREFIX)/share/man
 
-BINDIR = $(DESTDIR)/$(BINDIR)
-MANDIR = $(DESTDIR)/$(MANDIR)
-SCRIPTDIR = $(DESTDIR)/$(SCRIPTDIR)
-
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall debug
 
 all: $(PROG)
 
@@ -35,18 +44,24 @@ $(PROG): $(OBJS)
 clean:
 	rm -f $(OBJS) $(DEPS) $(PROG) *~
 
-install:
-	install -Dm 755 $(PROG) $(BINDIR)/$(PROG)
-	install -Dm 755 scripts/clearimg $(SCRIPTDIR)/clearimg
-	install -Dm 755 scripts/displayimg $(SCRIPTDIR)/displayimg
-	install -Dm 755 scripts/displayimg_uberzug $(SCRIPTDIR)/displayimg_uberzug
-	install -Dm 755 scripts/clearimg_uberzug $(SCRIPTDIR)/clearimg_uberzug
-	install -Dm 644 cfiles.1 $(MANDIR)/man1/cfiles.1
+install: all
+	mkdir -p $(DESTDIR)$(BINDIR)
+	mkdir -p $(DESTDIR)$(SCRIPTDIR)
+	mkdir -p $(DESTDIR)$(MANDIR)/man1
+	install -m 755 $(PROG) $(DESTDIR)$(BINDIR)/$(PROG)
+	install -m 755 scripts/clearimg $(DESTDIR)$(SCRIPTDIR)/clearimg
+	install -m 755 scripts/displayimg $(DESTDIR)$(SCRIPTDIR)/displayimg
+	install -m 755 scripts/displayimg_uberzug $(DESTDIR)$(SCRIPTDIR)/displayimg_uberzug
+	install -m 755 scripts/clearimg_uberzug $(DESTDIR)$(SCRIPTDIR)/clearimg_uberzug
+	install -m 644 cfiles.1 $(DESTDIR)$(MANDIR)/man1/cfiles.1
 
 uninstall:
-	rm -f $(BINDIR)/$(PROG)
-	rm -f $(SCRIPTDIR)/clearimg
-	rm -f $(SCRIPTDIR)/clearimg_uberzug
-	rm -f $(SCRIPTDIR)/displayimg_uberzug
-	rm -f $(SCRIPTDIR)/displayimg
-	rm -f $(MANDIR)/man1/cfiles.1
+	rm -f $(DESTDIR)$(BINDIR)/$(PROG)
+	rm -f $(DESTDIR)$(SCRIPTDIR)/clearimg
+	rm -f $(DESTDIR)$(SCRIPTDIR)/clearimg_uberzug
+	rm -f $(DESTDIR)$(SCRIPTDIR)/displayimg_uberzug
+	rm -f $(DESTDIR)$(SCRIPTDIR)/displayimg
+	rm -f $(DESTDIR)$(MANDIR)/man1/cfiles.1
+
+debug: clean
+	$(MAKE) CFLAGS="$(DEBUG_CFLAGS) $(NCURSES_CFLAGS) -MMD -MP"
