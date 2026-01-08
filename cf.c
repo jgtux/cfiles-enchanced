@@ -266,21 +266,29 @@ static char *textDup(const char *s, const char *err)
 
 static char *pathJoin(const char *base, const char *suffix, const char *err)
 {
-    size_t len;
-    char buf[PATH_MAX];
+  char buf[PATH_MAX];
+  size_t len;
+  int need_slash;
 
-    if (base == NULL || suffix == NULL)
-        return NULL;
+  if (base == NULL || suffix == NULL)
+    return NULL;
 
-    len = strlen(base) + strlen(suffix) + 1;
-    if (len > sizeof(buf))
+  need_slash =
+    base[0] && base[strlen(base) - 1] != '/' &&
+    suffix[0] != '/';
+
+  len = strlen(base) + strlen(suffix) + need_slash + 1;
+
+  if (len > sizeof(buf))
     {
-        printf("%s\n", err ? err : "Path too long");
-        exit(1);
+      printf("%s\n", err ? err : "Path too long");
+      exit(1);
     }
 
-    snprintf(buf, len, "%s%s", base, suffix);
-    return textDup(buf, err);
+
+  snprintf(buf, len, "%s%s%s", base, need_slash ? "/" : "", suffix);
+
+  return textDup(buf, err);
 }
 
 /*
@@ -373,63 +381,42 @@ static void init(int argc, char* argv[])
   }
 
   // Set dir as current directory
+  // Set dir as current directory
   char cwd[PATH_MAX];
-  if (getcwd(cwd, sizeof(cwd)) != NULL)
+
+  if (getcwd(cwd, sizeof(cwd)) == NULL)
     {
-      allocSize = snprintf(NULL,0,"%s",cwd);
-      dir = malloc(allocSize+1);
-      if(dir == NULL)
-        {
-          printf("%s\n", "Couldn't initialize dir");
-          exit(1);
-        }
-      snprintf(dir,allocSize+1,"%s",cwd);
-    }
-  else
-    {
-      printf("Couldn't open current directory");
+      perror("getcwd");
       exit(1);
     }
 
+  dir = textDup(cwd, "Couldn't initialize dir");
+
+
   // Path of directory was specified
-  if(argc == 2)
+  if (argc == 2)
     {
       // Absolute path
-      if(argv[1][0] == '/')
+      if (argv[1][0] == '/')
         {
+          size_t len = strlen(argv[1]);
+
+          // Remove trailing slash (except "/")
+          if (len > 1 && argv[1][len - 1] == '/')
+            argv[1][len - 1] = '\0';
+
           free(dir);
-          allocSize = snprintf(NULL, 0, "%s", argv[1]);
-          dir = malloc(allocSize+1);
-          if(dir == NULL)
-            {
-              printf("%s\n", "Couldn't initialize dir");
-              exit(1);
-            }
-          // Remove trailing forward slash, if exists, from path
-          if(strlen(argv[1]) > 1 && argv[1][strlen(argv[1])-1] == '/')
-            argv[1][strlen(argv[1])-1] = '\0';
-          snprintf(dir,allocSize+1,"%s", argv[1]);
+          dir = textDup(argv[1], "Couldn't initialize dir");
         }
       // Relative path
       else
         {
-          char *temp;
-          int temp_size;
-          temp_size = snprintf(NULL, 0, "%s", argv[1]);
-          allocSize = snprintf(NULL, 0, "%s", dir);
-          temp = malloc(temp_size + allocSize + 2);
-          snprintf(temp, temp_size + allocSize + 2, "%s/%s", dir, argv[1]);
+          char *joined = pathJoin(dir, argv[1], "Couldn't initialize dir");
           free(dir);
-          dir = malloc(temp_size + allocSize + 2);
-          if(dir == NULL)
-            {
-              printf("%s\n", "Couldn't initialize dir");
-              exit(1);
-            }
-          snprintf(dir, temp_size + allocSize + 2, "%s", temp);
-          free(temp);
+          dir = joined;
         }
     }
+
 
   // Excess arguments given
   else if(argc > 2)
