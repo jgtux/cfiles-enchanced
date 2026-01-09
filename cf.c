@@ -277,7 +277,7 @@ static char *pathJoin(const char *base, const char *suffix, const char *err)
     base[0] && base[strlen(base) - 1] != '/' &&
     suffix[0] != '/';
 
-  len = strlen(base) + strlen(suffix) + need_slash + 1;
+  len = strlen(base) + strlen(suffix) + (size_t)need_slash + 1;
 
   if (len > sizeof(buf))
     {
@@ -463,7 +463,7 @@ static int fileExists(char *file)
 /*
   Gets the last token from temp_dir by using `tokenizer` as a delimeter
 */
-static void getLastToken(char *tokenizer)
+static void getLastToken(const char *tokenizer)
 {
   pch = strtok(temp_dir, tokenizer);
   while (pch != NULL)
@@ -491,20 +491,12 @@ static int getNumberOfBookmarks(void)
     {
       return -1;
     }
-  char *buf;
-  buf = malloc(PATH_MAX);
-  if(buf == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
+  char buf[PATH_MAX];
   int num = 0;
   while(fgets(buf, PATH_MAX, (FILE*) fp))
     {
       num++;
     }
-  free(buf);
   fclose(fp);
   return num;
 }
@@ -515,154 +507,143 @@ static int getNumberOfBookmarks(void)
 */
 static void displayBookmarks(void)
 {
-  FILE *fp = fopen(bookmarks_path, "r");
-  char *buf;
-  if(fp == NULL)
-    {
-      endwin();
-      printf("Couldn't Open Bookmarks File!\n");
-      exit(1);
-    }
-  buf = malloc(PATH_MAX);
-  if(buf == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
-  wprintw(keys_win,"Key\tPath\n");
-  while(fgets(buf, PATH_MAX, (FILE*) fp))
-    {
-      wprintw(keys_win, "%c", buf[0]);
+    FILE *fp = fopen(bookmarks_path, "r");
+    char buf[PATH_MAX];
 
-      // Reallocate `tempdir`
-      free(temp_dir);
-      allocSize = snprintf(NULL,0,"%s",buf);
-      temp_dir = malloc(allocSize+1);
-      if(temp_dir == NULL)
+    if (fp == NULL)
+    {
+        endwin();
+        printf("Couldn't open bookmarks file!\n");
+        exit(1);
+    }
+
+    wprintw(keys_win, "Key\tPath\n");
+
+    while (fgets(buf, sizeof(buf), fp))
+    {
+        wprintw(keys_win, "%c", buf[0]);
+
+        /* Reallocate temp_dir */
+        free(temp_dir);
+        temp_dir = NULL;
+
+        temp_dir = textDup(buf + 2, "Couldn't allocate memory");
+
+        if (temp_dir == NULL)
         {
-          endwin();
-          printf("%s\n", "Couldn't allocate memory!");
-          exit(1);
+            endwin();
+            printf("Invalid bookmark entry\n");
+            exit(1);
         }
 
-      strncpy(temp_dir, buf + 2, strlen(buf)-2);
-      strtok(temp_dir,"\n");
-      wprintw(keys_win, "\t%s\n", temp_dir);
-    }
-  free(buf);
-  fclose(fp);
-}
+        temp_dir[strcspn(temp_dir, "\n")] = '\0';
 
+        wprintw(keys_win, "\t%s\n", temp_dir);
+    }
+
+    fclose(fp);
+}
 
 /*
-  Replaces `a` with `b` in `str`
+  Replaces `a` with `b` in `str` NO GROW!
 */
-static char* replace(char* str,const char* a,const char* b)
+static char *replace(char *str, const char *a, const char *b)
 {
-  size_t len  = strlen(str);
-  size_t lena = strlen(a);
-  size_t lenb = strlen(b);
-  char* p;
-  for (p = str; (p = strstr(p, a)); ++p)
+  if (!str || !a || !b || *a == '\0')
+    return str;
+
+
+  size_t len;
+  size_t lena;
+  size_t lenb;
+  char *p;
+
+
+  lena = strlen(a);
+  lenb = strlen(b);
+
+  if (lenb > lena)
+    return str;
+
+  len = strlen(str);
+
+  p = str;
+  while ((p = strstr(p, a)) != NULL)
     {
-      if (lena != lenb) // shift end as needed
-        memmove(p+lenb, p+lena, len - (p - str) + lenb);
+      if (lena != lenb)
+        {
+          memmove(p + lenb,
+                  p + lena,
+                  len - (size_t)(p - str) - lena + 1);
+          len -= (lena - lenb);
+        }
+
       memcpy(p, b, lenb);
+      p += lenb;
     }
+
   return str;
 }
-
 
 /*
   Opens the bookmark denoted by `secondKey`
 */
-static void openBookmarkDir(char secondKey)
+static void openBookmarkDir(int secondKey)
 {
-  FILE *fp = fopen(bookmarks_path, "r");
-  char *buf;
-  if(fp == NULL)
+    FILE *fp = fopen(bookmarks_path, "r");
+    if (fp == NULL)
     {
-      endwin();
-      printf("Couldn't Open Bookmarks File!\n");
-      exit(1);
+        endwin();
+        printf("Couldn't open bookmarks file!\n");
+        exit(1);
     }
-  buf = malloc(PATH_MAX);
-  if(buf == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
-  while(fgets(buf, PATH_MAX, (FILE*) fp))
-    {
-      if(buf[0] == secondKey)
-        {
-          // Reallocate `temp_dir`
-          free(temp_dir);
-          allocSize = snprintf(NULL,0,"%s",buf);
-          temp_dir = malloc(allocSize+1);
-          if(temp_dir == NULL)
-            {
-              endwin();
-              printf("%s\n", "Couldn't allocate memory!");
-              exit(1);
-            }
-          strncpy(temp_dir, buf + 2, strlen(buf)-2);
-          strtok(temp_dir,"\n");
-          replace(temp_dir,"//","\n");
-          if( fileExists(temp_dir) == 1 )
-            {
-              // Reallocate `dir`
-              free(dir);
-              allocSize = snprintf(NULL,0,"%s",temp_dir);
-              dir = malloc(allocSize+1);
-              if(dir == NULL)
-                {
-                  endwin();
-                  printf("%s\n", "Couldn't allocate memory!");
-                  exit(1);
-                }
-              snprintf(dir,allocSize+1,"%s",temp_dir);
-            }
-          start = 0;
-          selection = 0;
-          break;
-        }
-    }
-  free(buf);
-  fclose(fp);
-}
 
+    char line[PATH_MAX];
+    while (fgets(line, sizeof(line), fp))
+    {
+        if (line[0] != secondKey)
+            continue;
+
+        line[strcspn(line, "\n")] = '\0';
+
+        free(temp_dir);
+        temp_dir = textDup(line + 2, "Couldn't allocate temp_dir");
+
+        replace(temp_dir, "//", "\n");
+
+        if (fileExists(temp_dir))
+        {
+            free(dir);
+            dir = textDup(temp_dir, "Couldn't allocate dir");
+        }
+
+        start = 0;
+        selection = 0;
+        break;
+    }
+
+    fclose(fp);
+}
 
 /*
   Checks if bookmark denoted with `bookmark` exists
 */
-static int bookmarkExists(char bookmark)
+static int bookmarkExists(int bookmark)
 {
   FILE *fp = fopen(bookmarks_path, "r");
   if( fp == NULL )
     {
       return 0;
     }
-  char *buf;
-  buf = malloc(PATH_MAX);
-  if(buf == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
+  char buf[PATH_MAX];
   while(fgets(buf, PATH_MAX, (FILE*) fp))
     {
       if(buf[0] == bookmark)
         {
           fclose(fp);
-          free(buf);
           return 1;
         }
     }
-  free(buf);
   fclose(fp);
   return 0;
 }
@@ -671,27 +652,25 @@ static int bookmarkExists(char bookmark)
 /*
   Adds new bookmark
 */
-static void addBookmark(char bookmark, char *path)
+static void addBookmark(int bookmark, const char *path)
 {
-  FILE *fp = fopen(bookmarks_path, "a+");
-  if(fp == NULL)
+    FILE *fp = fopen(bookmarks_path, "a");
+    if (fp == NULL)
     {
-      endwin();
-      printf("Couldn't Open Bookmarks File!\n");
-      exit(1);
+        endwin();
+        printf("Couldn't open bookmarks file!\n");
+        exit(1);
     }
-  int allocSize = snprintf(NULL, 0, "%s", path);
-  path = realloc(path, allocSize+2);
-  char *temp = strdup(path);
-  if(temp == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
-  fprintf(fp,"%c:%s\n", bookmark, replace(temp,"\n","//"));
-  free(temp);
-  fclose(fp);
+
+    char *tmp = textDup(path, "Couldn't duplicate path for bookmark");
+
+    tmp[strcspn(tmp, "\n")] = '\0';
+    replace(tmp, "\n", "//");
+
+    fprintf(fp, "%c:%s\n", bookmark, tmp);
+
+    free(tmp);
+    fclose(fp);
 }
 
 
@@ -709,31 +688,17 @@ static WINDOW *create_newwin(int height, int width, int starty, int startx)
 /*
   For qsort
 */
-static int compare (const void * a, const void * b )
+static int compare(const void * a, const void * b)
 {
   // They store the full paths of the arguments
-  char *temp_filepath1 = NULL;
-  char *temp_filepath2 = NULL;
+  char *temp_filepath1;
+  char *temp_filepath2;
 
-  // Allocate Memory and Generate full paths
-  allocSize = snprintf(NULL,0,"%s/%s", sort_dir, *(char **)a);
-  temp_filepath1 = malloc(allocSize+1);
-  if(temp_filepath1 == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
-  snprintf(temp_filepath1,PATH_MAX,"%s/%s", sort_dir, *(char **)a);
-  allocSize = snprintf(NULL,0,"%s/%s", sort_dir, *(char **)b);
-  temp_filepath2 = malloc(allocSize+1);
-  if(temp_filepath2 == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
-    }
-  snprintf(temp_filepath2,PATH_MAX,"%s/%s", sort_dir, *(char **)b);
+  // Generate full paths
+  temp_filepath1 = pathJoin(sort_dir, *(char **)a, "Couldn't allocate temp_filepath1");
+
+  temp_filepath2 = pathJoin(sort_dir, *(char **)b, "Couldn't allocate temp_filepath2");
+ 
 
   if(is_regular_file(temp_filepath1) == 0 && is_regular_file(temp_filepath2) == 1)
     {
@@ -759,59 +724,60 @@ static int compare (const void * a, const void * b )
 /*
   Gets file MIME
 */
-static void getMIME(char *filepath, char mime[50])
+static void getMIME(const char *filepath, char mime[50])
 {
-  char buf[50];
-  FILE *fp;
-  int fd;
-  pid_t pid;
+    char buf[50];
+    FILE *fp;
+    pid_t pid;
 
-  // Reallocate `temp_dir` and store path to preview file
-  free(temp_dir);
-  allocSize = snprintf(NULL,0,"%s/mime",cache_path);
-  temp_dir = malloc(allocSize+1);
-  if(temp_dir == NULL)
+    free(temp_dir);
+    temp_dir = pathJoin(cache_path, "/mime", "Couldn't allocate temp mime path");
+
+    remove(temp_dir);
+
+    pid = fork();
+    if (pid == 0)
     {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
+        int fd = open(temp_dir, O_CREAT | O_WRONLY | O_TRUNC, 0755);
+        if (fd == -1) exit(1);
+        int null_fd = open("/dev/null", O_WRONLY);
+        if (null_fd == -1) exit(1);
+
+        dup2(fd, STDOUT_FILENO);
+        dup2(null_fd, STDERR_FILENO);
+
+        execlp("xdg-mime", "xdg-mime", "query", "filetype", filepath, (char *)0);
+        exit(1);
     }
-  snprintf(temp_dir,allocSize+1,"%s/mime",cache_path);
-
-  // Remove the preview file
-  remove(temp_dir);
-
-  // Create a child process to run command and store output in preview file
-  pid = fork();
-  if( pid == 0 )
+    else if (pid > 0)
     {
-      fd = open(temp_dir, O_CREAT | O_WRONLY, 0755);
-      int null_fd = open("/dev/null", O_WRONLY);
-      dup2(fd, 1);
-      dup2(null_fd, 2);
-      execlp("xdg-mime","xdg-mime","query","filetype",filepath,(char *)0);
-      exit(1);
-    }
-  else
-    {
-      int status;
-      waitpid(pid,&status,0);
-      // Open preview file to read output
-      fp = fopen(temp_dir, "r");
-      if(fp == NULL)
+        int status;
+        waitpid(pid, &status, 0);
+
+        fp = fopen(temp_dir, "r");
+        if (fp == NULL)
+            return;
+
+        if (fgets(buf, sizeof(buf), fp) == NULL)
         {
-          return;
+            fclose(fp);
+            return;
         }
-      while(fgets(buf,50,(FILE *)fp) != NULL){}
-      fclose(fp);
-      if(strlen(buf) >= 3 && buf[0] == 'a' && buf[1] == 'p' && buf[2] == 'p')
+        fclose(fp);
+
+        buf[strcspn(buf, "\n")] = '\0';
+
+        if (strncmp(buf, "app", 3) == 0)
         {
-          snprintf(mime, 50, "%s", buf);
+            snprintf(mime, 50, "%s", buf);
         }
-      else
+        else
         {
-          strtok(buf,"/");
-          snprintf(mime,50,"%s",buf);
+            char *token = strtok(buf, "/");
+            if (token != NULL)
+                snprintf(mime, 50, "%s", token);
+            else
+                mime[0] = '\0';
         }
     }
 }
@@ -873,41 +839,39 @@ static void openFile(char *filepath)
 /*
   Checks if path is in clipboard
 */
-static int checkClipboard(char *filepath)
+static int checkClipboard(const char *filepath)
 {
-  FILE *f = fopen(clipboard_path, "r");
-  char buf[PATH_MAX];
-  char *temp = NULL;
-  // Allocate Memory to `temp`
-  allocSize = snprintf(NULL,0,"%s", filepath);
-  temp = malloc(allocSize+1);
-  if(temp == NULL)
+    FILE *f = fopen(clipboard_path, "r");
+    char buf[PATH_MAX];
+
+    char *temp = textDup(filepath, "Couldn't allocate memory for clipboard check");
+    if (temp == NULL)
+        return 0;
+
+    temp[strlen(temp)] = '\0';
+
+    if (f == NULL)
     {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
+        free(temp);
+        return 0;
     }
-  snprintf(temp, allocSize+1, "%s", filepath);
-  temp[strlen(temp)]='\0';
-  if(f == NULL)
+
+    replace(temp, "\n", "//");
+
+    while (fgets(buf, PATH_MAX, f))
     {
-      free(temp);
-      return 0;
-    }
-  replace(temp,"\n","//");
-  while(fgets(buf, PATH_MAX, (FILE*) f))
-    {
-      buf[strlen(buf)-1] = '\0';
-      if(strcmp(temp,buf) == 0)
+        buf[strcspn(buf, "\n")] = '\0';
+        if (strcmp(temp, buf) == 0)
         {
-          free(temp);
-          fclose(f);
-          return 1;
+            free(temp);
+            fclose(f);
+            return 1;
         }
     }
-  fclose(f);
-  free(temp);
-  return 0;
+
+    fclose(f);
+    free(temp);
+    return 0;
 }
 
 
@@ -931,48 +895,44 @@ static void writeClipboard(char *filepath)
 /*
   Removes entry from clipboard
 */
-static void removeClipboard(char *filepath)
+static void removeClipboard(const char *filepath)
 {
-  FILE *f1;
-  FILE *f2;
-  char buf[PATH_MAX];
+    FILE *f1 = fopen(clipboard_path, "r");
+    if (f1 == NULL)
+    {
+        endwin();
+        printf("Couldn't Open Clipboard File!\n");
+        exit(1);
+    }
 
-  // Create `temp_clipboard` without `filepath`
-  f1 = fopen(clipboard_path,"r");
-  f2 = fopen(temp_clipboard_path,"a+");
-  if(f1 == NULL)
+    FILE *f2 = fopen(temp_clipboard_path, "w");
+    if (f2 == NULL)
     {
-      endwin();
-      printf("Couldn't Open Clipboard File!\n");
-      exit(1);
+        fclose(f1);
+        endwin();
+        printf("Couldn't Create Temporary Clipboard File!\n");
+        exit(1);
     }
-  if(f2 == NULL)
-    {
-      endwin();
-      printf("Couldn't Create Temporary Clipboard File!\n");
-      exit(1);
-    }
-  while(fgets(buf, PATH_MAX, (FILE*)f1))
-    {
-      buf[strlen(buf)-1] = '\0';
-      if(strcasecmp(buf, filepath) != 0)
-        fprintf(f2, "%s\n", buf);
-    }
-  fclose(f1);
-  fclose(f2);
 
-  // Create a child process to replace clipboard_path with temp_clipboard_path
-  pid_t pid;
-  pid = fork();
-  if( pid == 0 )
+    char buf[PATH_MAX];
+    while (fgets(buf, sizeof(buf), f1))
     {
-      execlp("mv", "mv", temp_clipboard_path, clipboard_path, (char *)0);
-      exit(1);
+        buf[strcspn(buf, "\n")] = '\0';  // safely remove newline
+        if (strcasecmp(buf, filepath) != 0)
+        {
+            fprintf(f2, "%s\n", buf);
+        }
     }
-  else
+
+    fclose(f1);
+    fclose(f2);
+
+    // Replace clipboard_path with temp file
+    if (rename(temp_clipboard_path, clipboard_path) != 0)
     {
-      int status;
-      waitpid(pid, &status, 0);
+        endwin();
+        perror("Couldn't update clipboard file");
+        exit(1);
     }
 }
 
@@ -1776,7 +1736,7 @@ static void viewPreview(void)
 /*
   Checks if some flags are enabled and handles them accordingly
 */
-void handleFlags(char** directories)
+static void handleFlags(char** directories)
 {
   // Clear the preview_win
   if(clearFlag == 1)
@@ -1986,7 +1946,7 @@ int main(int argc, char* argv[])
   do
     {
       // Stores length of VLA `directories`
-      int temp_len;
+      size_t temp_len;
 
       // Get number of files in the home directory
       len = getNumberofFiles(dir);
@@ -2852,28 +2812,14 @@ int main(int argc, char* argv[])
               option--;
               if(option < len_scripts && option >= 0)
                 {
-                  // Reallocate `temp_dir` to store path of script
+                 // Reallocate `temp_dir` to store path of script
                   free(temp_dir);
-                  allocSize = snprintf(NULL, 0, "%s/%s", scripts_path, scripts[option]);
-                  temp_dir = malloc(allocSize+1);
-                  if(temp_dir == NULL)
-                    {
-                      endwin();
-                      printf("%s\n", "Couldn't allocate memory!");
-                      exit(1);
-                    }
-                  snprintf(temp_dir, allocSize+1, "%s/%s", scripts_path, scripts[option]);
+                  temp_dir = textDup(pathJoin(scripts_path, scripts[option], "Couldn't initialize script path"),
+                                     "Couldn't initialize temp_dir");
 
                   // Allocate Memory to `buf` to store path of selection
-                  allocSize = snprintf(NULL, 0, "%s/%s", dir, directories[selection]);
-                  buf = malloc(allocSize+1);
-                  if(buf == NULL)
-                    {
-                      endwin();
-                      printf("%s\n", "Couldn't allocate memory!");
-                      exit(1);
-                    }
-                  snprintf(buf, allocSize+1, "%s/%s", dir, directories[selection]);
+                  buf = textDup(pathJoin(dir, directories[selection], "Couldn't initialize selection path"),
+                                "Couldn't initialize buf");
 
                   // Exit ncurses mode to execute the script
                   endwin();
