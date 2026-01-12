@@ -34,11 +34,8 @@
 // GLOBAL VARIABLES //
 //////////////////////
 
-// Stores signal set containing SIGNWINCH
+// Stores signal set containing SIGWINCH
 sigset_t x;
-
-// Stores the value of signal most recently raised
-int raised_signal=-1;
 
 // To store number of files in directory
 int len=0;
@@ -169,22 +166,17 @@ int startx, starty, maxx, maxy;
 */
 static void displayStatus(void)
 {
-  wmove(status_win,1,0);
-  wattron(status_win, COLOR_PAIR(2));
-  if( SHOW_SELECTION_COUNT == 1 )
-    {
-      wprintw(status_win,"[%d] ", selectedFiles);
-    }
-  wprintw(status_win, "(%d/%d)", selection+1, len);
-  wprintw(status_win, " %s", dir);
-  wattroff(status_win, COLOR_PAIR(2));
-  wattron(status_win, COLOR_PAIR(3));
-  if(strcasecmp(dir,"/") == 0)
-    wprintw(status_win, "%s", selected_file);
-  else
-    wprintw(status_win, "/%s", selected_file);
-  wattroff(status_win, COLOR_PAIR(3));
-  wrefresh(status_win);
+    wmove(status_win, 1, 0);
+    wclrtoeol(status_win);
+    wattron(status_win, COLOR_PAIR(2));
+    if (SHOW_SELECTION_COUNT) wprintw(status_win, "[%d] ", selectedFiles);
+    wprintw(status_win, "(%d/%d) %s", selection + 1, len, dir);
+    wattroff(status_win, COLOR_PAIR(2));
+    wattron(status_win, COLOR_PAIR(3));
+    const char *prefix = (dir[0] == '/' && dir[1] == '\0') ? "" : "/";
+    wprintw(status_win, "%s%s", prefix, selected_file);
+    wattroff(status_win, COLOR_PAIR(3));
+    wrefresh(status_win);
 }
 
 
@@ -193,25 +185,14 @@ static void displayStatus(void)
 */
 static void displayAlert(const char *message)
 {
-  wclear(status_win);
-  wattron(status_win, A_BOLD);
-  wprintw(status_win, "\n%s", message);
-  wattroff(status_win, A_BOLD);
-  wrefresh(status_win);
+    if (!message) return;
+    werase(status_win);
+    wmove(status_win, 1, 0);
+    wattron(status_win, A_BOLD);
+    wprintw(status_win, "%s", message);
+    wattroff(status_win, A_BOLD);
+    wrefresh(status_win);
 }
-
-
-/*
-  Signal Handler. Sets `raised_signal` to `signal`
-*/
-static void cb_sig(int signal)
-{
-  if (signal == SIGUSR1)
-    raised_signal = SIGUSR1;
-  else if (signal == SIGCHLD)
-    raised_signal = SIGCHLD;
-}
-
 
 /*
   Checks if `path` is a file or directory
@@ -248,10 +229,8 @@ static char *textDup(const char *s, const char *err)
 {
     size_t n;
     char *p;
-
     if (s == NULL || s[0] == '\0')
         return NULL;
-
     n = strlen(s) + 1;
     p = malloc(n);
     if (p == NULL)
@@ -259,7 +238,6 @@ static char *textDup(const char *s, const char *err)
         printf("%s\n", (err == NULL) ? "Couldn't duplicate string" : err);
         exit(1); 
       }
-
     memcpy(p, s, n);
     return p;
 }
@@ -269,25 +247,18 @@ static char *pathJoin(const char *base, const char *suffix, const char *err)
   char buf[PATH_MAX];
   size_t len;
   int need_slash;
-
   if (base == NULL || suffix == NULL)
     return NULL;
-
   need_slash =
     base[0] && base[strlen(base) - 1] != '/' &&
     suffix[0] != '/';
-
   len = strlen(base) + strlen(suffix) + (size_t)need_slash + 1;
-
   if (len > sizeof(buf))
     {
       printf("%s\n", err ? err : "Path too long");
       exit(1);
     }
-
-
   snprintf(buf, len, "%s%s%s", base, need_slash ? "/" : "", suffix);
-
   return textDup(buf, err);
 }
 
@@ -509,38 +480,29 @@ static void displayBookmarks(void)
 {
     FILE *fp = fopen(bookmarks_path, "r");
     char buf[PATH_MAX];
-
     if (fp == NULL)
     {
         endwin();
         printf("Couldn't open bookmarks file!\n");
         exit(1);
     }
-
     wprintw(keys_win, "Key\tPath\n");
-
     while (fgets(buf, sizeof(buf), fp))
     {
         wprintw(keys_win, "%c", buf[0]);
-
         /* Reallocate temp_dir */
         free(temp_dir);
         temp_dir = NULL;
-
         temp_dir = textDup(buf + 2, "Couldn't allocate memory");
-
         if (temp_dir == NULL)
         {
             endwin();
             printf("Invalid bookmark entry\n");
             exit(1);
         }
-
         temp_dir[strcspn(temp_dir, "\n")] = '\0';
-
         wprintw(keys_win, "\t%s\n", temp_dir);
     }
-
     fclose(fp);
 }
 
@@ -952,7 +914,7 @@ static void emptyClipboard(void)
 /*
   Gets previews of images
 */
-static void getImgPreview(char *filepath, int maxy, int maxx)
+static void getImgPreview(const char *filepath, int maxy, int maxx)
 {
   pid_t pid;
   pid = fork();
@@ -979,60 +941,34 @@ static void getImgPreview(char *filepath, int maxy, int maxx)
 /*
   Gets previews of PDF Documents
 */
-static void getPDFPreview(char *filepath, int maxy, int maxx)
+static void getPDFPreview(const char *filepath, int maxy, int maxx)
 {
-  // Set the signal handler
-  struct sigaction act;
-  sigemptyset(&act.sa_mask);
-  act.sa_flags = 0;
-  act.sa_handler = cb_sig;
-
-  if(sigaction(SIGUSR1, &act, NULL) == -1) 
-    printf("unable to handle siguser1\n");
-  if (sigaction(SIGCHLD, &act, NULL) == -1) 
-    printf("unable to handle sigchild\n");
-
-  // Target name of the PDF
-  char imgout[] = "/tmp/prev.jpg";
-
-  pid_t pid;
-  pid = fork();
-
-  if(pid == 0)
-    {
-      execlp("pdftoppm","pdftoppm","-l","1","-jpeg",filepath,"-singlefile", "/tmp/prev", (char *)NULL);
-      exit(1);
+    pid_t pid;
+    int status;
+    const char imgout[] = "/tmp/prev.jpg";
+    pid = fork();
+    if (pid == 0) {
+        execlp("pdftoppm", "pdftoppm", "-l", "1", "-jpeg", filepath, "-singlefile", "/tmp/prev", (char *)NULL);
+        _exit(1);
     }
-  else
-    {
-      //displayAlert("WORKING... PRESS ANY KEY TO ABORT");
-      if (ERR == getch())
-        {}
-      else
-        {
-          raise(SIGUSR1);
+    for (;;) {
+        int ch = getch();
+        if (ch != ERR) {
+            kill(pid, SIGINT);
+            break;
         }
-      if (raised_signal == SIGUSR1)
-        {
-          kill(pid, SIGINT);
-          //displayStatus();
-          return;
-        }
-      else if (raised_signal == SIGCHLD)
-        {
-          getImgPreview(imgout, maxy, maxx);
-          clearFlagImg = 1;
-          //displayStatus();
-          return;
+        if (waitpid(pid, &status, WNOHANG) == pid) {
+            getImgPreview(imgout, maxy, maxx);
+            clearFlagImg = 1;
+            break;
         }
     }
 }
 
-
 /*
   Gets previews of text in files
 */
-static void getTextPreview(char *filepath, int maxy, int maxx)
+static void getTextPreview(const char *filepath, int maxy, int maxx)
 {
   // Don't Generate Preview if file size > 50MB
   struct stat st;
@@ -1134,75 +1070,46 @@ static void getTextPreview(char *filepath, int maxy, int maxx)
 /*
   Gets previews of archives
 */
-static void getArchivePreview(char *filepath, int maxy, int maxx)
+static void getArchivePreview(const char *filepath, int maxy, int maxx)
 {
-  pid_t pid;
-  int fd;
-  int null_fd;
-
-  // Reallocate `temp_dir` and store path to preview file
-  char *preview_path = NULL;
-  allocSize = snprintf(NULL, 0, "%s/preview", cache_path);
-  preview_path = malloc(allocSize+1);
-  if(preview_path == NULL)
-    {
-      endwin();
-      printf("%s\n", "Couldn't allocate memory!");
-      exit(1);
+    pid_t pid;
+    int fd;
+    int null_fd;
+    int status;
+    char *preview_path = NULL;
+    allocSize = snprintf(NULL, 0, "%s/preview", cache_path);
+    preview_path = malloc(allocSize + 1);
+    if (preview_path == NULL) {
+        endwin();
+        printf("Couldn't allocate memory!\n");
+        exit(1);
     }
-  snprintf(preview_path, allocSize+1, "%s/preview", cache_path);
-
-  // Set the signal handler
-  struct sigaction act;
-  sigemptyset(&act.sa_mask);
-  act.sa_flags = 0;
-  act.sa_handler = cb_sig;
-
-  if(sigaction(SIGUSR1, &act, NULL) == -1) 
-    printf("unable to handle siguser1\n");
-  if (sigaction(SIGCHLD, &act, NULL) == -1) 
-    printf("unable to handle sigchild\n");
-
-  // Create a child process to run "atool -lq filepath > ~/.config/cfiles/preview"
-  pid = fork();
-  if( pid == 0 )
-    {
-      remove(preview_path);
-      fd = open(preview_path, O_CREAT | O_WRONLY, 0755);
-      null_fd = open("/dev/null", O_WRONLY);
-      // Redirect stdout
-      dup2(fd, 1);
-      // Redirect errors to /dev/null
-      dup2(null_fd, 2);
-      execlp("atool", "atool", "-lq", filepath, (char *)0);
-      exit(1);
+    snprintf(preview_path, allocSize + 1, "%s/preview", cache_path);
+    pid = fork();
+    if (pid == 0) {
+        remove(preview_path);
+        fd = open(preview_path, O_CREAT | O_WRONLY, 0755);
+        null_fd = open("/dev/null", O_WRONLY);
+        dup2(fd, 1);
+        dup2(null_fd, 2);
+        close(fd);
+        close(null_fd);
+        execlp("atool", "atool", "-lq", filepath, (char *)NULL);
+        _exit(1);
     }
-  else
-    {
-      //displayAlert("WORKING... PRESS ANY KEY TO ABORT");
-      if (ERR == getch())
-        {}
-      else
-        {
-          raise(SIGUSR1);
+    for (;;) {
+        int ch = getch();
+        if (ch != ERR) {
+            kill(pid, SIGINT);
+            break;
         }
-      if (raised_signal == SIGUSR1)
-        {
-          kill(pid, SIGINT);
-          //displayStatus();
-          free(preview_path);
-          return;
-        }
-      else if (raised_signal == SIGCHLD)
-        {
-          //displayStatus();
-          getTextPreview(preview_path, maxy, maxx);
-          free(preview_path);
-          return;
+        if (waitpid(pid, &status, WNOHANG) == pid) {
+            getTextPreview(preview_path, maxy, maxx);
+            break;
         }
     }
+    free(preview_path);
 }
-
 
 /*
   Gets previews of video files (Dummy)
