@@ -10,11 +10,31 @@
 <a href="https://github.com/mananapr/cfiles/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License" /></a>
 </p>
 
+> The badges above (release, AUR, Homebrew) reflect **upstream** (mananapr/cfiles), not this fork specifically — this fork isn't published to those channels under its own name.
+
 `cfiles` is a terminal file manager with vim like keybindings, written in C using the ncurses
 library. It aims to provide an interface like [ranger](https://github.com/ranger/ranger) while being lightweight, fast and
 minimal.
 
 ![screenshot](cf.png)
+
+## Changes in this fork
+
+Upstream (mananapr/cfiles) has been inactive since 2021. On top of it, this fork fixes:
+
+**Memory-safety fixes**
+- `compare()` sized a heap buffer with `snprintf(NULL, 0, ...)` (exact length) but then wrote into it with `snprintf(buf, PATH_MAX, ...)` — a heap buffer overflow whenever the real path was shorter than `PATH_MAX`.
+- `checkClipboard`/`removeClipboard` did `buf[strlen(buf)-1] = '\0'`, which underflows to `SIZE_MAX` on an empty line, causing an out-of-bounds write. Same underflow pattern existed in `displayBookmarks`/`openBookmarkDir`'s `strncpy(temp_dir, buf+2, strlen(buf)-2)` on short/malformed bookmark lines, which also lacked NUL-termination.
+- `addBookmark()` called `realloc()` on a pointer that stayed referenced elsewhere globally — a potential dangling-pointer/use-after-free if the block moved.
+- All of the above are now routed through two bounds-checked helpers, `textDup()` and `pathJoin()`, which size from `strlen()`, bound-check against `PATH_MAX`, and use `strcspn(buf, "\n")` instead of arithmetic that can underflow.
+
+**Signal handling simplified**
+- Removed the `SIGUSR1`/`SIGCHLD`-based `cb_sig` handler used to unify "key pressed" and "child process exited" detection around a blocking `getch()` call, in favor of a plain `getch()` + `waitpid(pid, &status, WNOHANG)` loop. Note: curses isn't in `nodelay` mode, so `getch()` still blocks — the `waitpid` check now only runs between keypresses rather than being woken immediately on child exit, which is a behavior change worth knowing about if you rely on fast previews-ready detection.
+
+**Build**
+- Replaced empty-paren K&R-style function signatures (`void foo()`) with `static void foo(void)`, fixing genuinely unspecified-argument prototypes under `-Wstrict-prototypes`.
+- Reduced compiler warnings from 176 to 63 under stricter flags (see the `debug` target).
+- Fixed GNU/BSD `make` portability the right way: both GNU Make (4.0+) and BSD make natively support the `!=` shell-assignment operator, so `NCURSES_CFLAGS`/`NCURSES_LIBS` no longer need a `.ifdef .MAKE` conditional block at all — a single `!=` line works on both. (An earlier version of this fix used `.ifdef`, which is BSD-make-only syntax and broke GNU make outright; verified fixed by building clean with GNU Make 4.4.1.)
 
 ## Dependencies
 - `ncursesw`
