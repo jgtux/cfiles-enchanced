@@ -1,12 +1,5 @@
-.ifdef .MAKE
-# BSD Make
 NCURSES_CFLAGS != pkg-config --cflags ncursesw
 NCURSES_LIBS   != pkg-config --libs ncursesw
-.else
-# GNU Make
-NCURSES_CFLAGS := $(shell pkg-config --cflags ncursesw)
-NCURSES_LIBS   := $(shell pkg-config --libs ncursesw)
-.endif
 
 CC ?= cc
 
